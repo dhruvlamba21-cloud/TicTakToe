@@ -676,30 +676,43 @@
       return currentPlayer === 'X' ? 'Your turn — you are X' : 'Computer is thinking…';
     }
 
+    function getEmptyCells(state = board) {
+      return state.map((value, index) => value === '' ? index : null).filter(index => index !== null);
+    }
+
     function scheduleAiMove() {
       clearTimeout(aiTimer);
       const roundAtSchedule = gameRound;
       const difficultyAtSchedule = difficulty;
-      renderBoard();
+
       aiTimer = setTimeout(() => {
+        aiTimer = null;
+
         // Ignore stale timers from a previous round/mode/difficulty change.
         if (gameOver || mode !== 'ai' || currentPlayer !== 'O' || roundAtSchedule !== gameRound) return;
 
+        // Re-read the board at the exact moment the AI moves. This prevents
+        // an async AI turn from ever targeting a square that is no longer empty.
+        const available = getEmptyCells();
+        if (!available.length) return;
+
         let move = chooseAiMove(difficultyAtSchedule);
-        // Defensive guard: the AI can never overwrite an occupied square.
-        if (move == null || board[move]) {
-          move = chooseAiMove(difficulty);
-          if (move == null || board[move]) return;
+
+        // Final hard guard: the selected square MUST be empty right now.
+        if (!Number.isInteger(move) || !available.includes(move)) {
+          move = pickRandom(available);
         }
 
         board[move] = 'O';
         playMoveSound('O');
         renderBoard();
+
         const result = resultFor(board);
         if (result) {
           finishGame(result);
           return;
         }
+
         currentPlayer = 'X';
         setStatus(getTurnText());
         renderBoard();
@@ -707,7 +720,7 @@
     }
 
     function chooseAiMove(level = difficulty) {
-      const empty = board.map((v,i) => v ? null : i).filter(v => v !== null);
+      const empty = getEmptyCells();
       if (!empty.length) return null;
 
       if (level === 'easy') {
